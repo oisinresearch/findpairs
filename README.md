@@ -41,15 +41,18 @@ sudo apt-get install pari-gp libpari-dev gp2c
 
 You can build the entire suite using the provided Makefile:
 
-# Build both the PARI/GP C-extension and standalone utilities
+### Build both the PARI/GP C-extension and standalone utilities
+```
 make all
-
-# Build only the PARI/GP shared object
+```
+### Build only the PARI/GP shared object
+```
 make library
-
-# Build only the verification tools
+```
+### Build only the verification tools
+```
 make tools
-
+```
 ## How to Run
 
 1. Execute the Main Sieve Search
@@ -77,10 +80,10 @@ default(parisizemax,32*1024^3);
 
 2. Standalone Verification Tools
 To run the algorithmic verification binaries:
-# Run correctness checks
+## Run correctness checks
 ./fk2d
 
-# View sample raw sieve streams
+## View sample raw sieve streams
 ./printfk2d
 
 ## Mathematical Summary of the Sieve
