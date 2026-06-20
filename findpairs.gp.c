@@ -8,7 +8,7 @@ install("init_findpairs","v","init_findpairs","./findpairs.gp.so");
 install("issmooth","lD0,G,D0,G,","issmooth","./findpairs.gp.so");
 install("fact_str","D0,G,","fact_str","./findpairs.gp.so");
 install("process_one_field","D0,G,D0,G,D0,G,D0,G,D0,G,D0,G,","process_one_field","./findpairs.gp.so");
-install("findpairs","vD0,G,D0,G,D0,G,D0,G,D0,G,D0,G,D0,G,D0,G,p","findpairs","./findpairs.gp.so", "findpairs(num_fields, target, B, N0, start_D, mlim, threads, A):\nSearches for matching smooth norms across fundamental discriminants.\n  num_fields : Number of fundamental discriminants to process\n  target     : Target number of smooth norms to find per field\n  B          : Smoothness bound (max prime factor)\n  N0         : Minimum acceptable norm magnitude\n  start_D    : Starting point for fundamental discriminants\n  mlim       : Timeout in minutes per field\n  threads    : Number of parallel worker threads\n  A          : Sieve region parameter (defines [-A/2, A/2) x [1, 2A])");
+install("findpairs","GD0,G,D0,G,D0,G,D0,G,D0,G,D0,G,D0,G,D0,G,p","findpairs","./findpairs.gp.so", "findpairs(num_fields, target, B, N0, start_D, mlim, threads, A):\nSearches for matching smooth norms across fundamental discriminants.\n  num_fields : Number of fundamental discriminants to process\n  target     : Target number of smooth norms to find per field\n  B          : Smoothness bound (max prime factor)\n  N0         : Minimum acceptable norm magnitude\n  start_D    : Starting point for fundamental discriminants\n  mlim       : Timeout in minutes per field\n  threads    : Number of parallel worker threads\n  A          : Sieve region parameter (defines [-A/2, A/2) x [1, 2A])");
 install("anon_0","D0,G,GGGGGG","anon_0","./findpairs.gp.so");
 install("anon_1","D0,G,GG","anon_1","./findpairs.gp.so");
 */
@@ -16,7 +16,7 @@ void init_findpairs(void);
 long issmooth(GEN n, GEN bound);
 GEN fact_str(GEN n);
 GEN process_one_field(GEN D, GEN target, GEN B, GEN N0, GEN mlim, GEN A_sieve_in);
-void findpairs(GEN num_fields, GEN target, GEN B, GEN N0, GEN start_D, GEN mlim, GEN t, GEN A_sieve_in, long prec);
+GEN findpairs(GEN num_fields, GEN target, GEN B, GEN N0, GEN start_D, GEN mlim, GEN t, GEN A_sieve_in, long prec);
 GEN anon_0(GEN i, GEN D_list, GEN target, GEN B, GEN N0, GEN mlim, GEN A_sieve_in);
 GEN anon_1(GEN i, GEN num_fields, GEN field_norms);
 /*End of prototype*/
@@ -375,9 +375,10 @@ anon_1(GEN i, GEN num_fields, GEN field_norms)	  /* vec */
 /* 2. Main Encapsulated Routine */
 /* ========================================================================= */
 
-void
+GEN
 findpairs(GEN num_fields, GEN target, GEN B, GEN N0, GEN start_D, GEN mlim, GEN t, GEN A_sieve_in, long prec)
 {
+  pari_sp av = avma; /* <-- FIX: Save stack state */
   GEN D_list, d, field_data;
   GEN p1;	  /* vec */
   GEN field_norms;
@@ -445,7 +446,7 @@ findpairs(GEN num_fields, GEN target, GEN B, GEN N0, GEN start_D, GEN mlim, GEN 
       GEN p12 = gen_0;
       gel(field_norms, gtos(i)) = gcopy(gel(gel(field_data, gtos(i)), 2));
       if (glength(gel(gel(field_data, gtos(i)), 2)) > 0)
-        p12 = listinit(gtomap(gel(gel(field_data, gtos(i)), 3)));
+        p12 = listinit(gtomap(gel(gel(field_data, gtos(i)), 3))); /* <-- Restored to original */
       else
         p12 = mkmap();
       gel(field_maps, gtos(i)) = p12;
@@ -522,7 +523,7 @@ findpairs(GEN num_fields, GEN target, GEN B, GEN N0, GEN start_D, GEN mlim, GEN 
   if (glength(all_common) == 0)
   {
     pari_printf("\nNo shared smooth norms found among the processed pairs.\n");
-    return;
+    return gerepilecopy(av, cgetg(1, t_VEC)); /* <-- FIX: Safe stack return */
   }
   pari_printf("\nTop %Ps Shared Norm Elements:\n", display_count);
   {
@@ -542,6 +543,33 @@ findpairs(GEN num_fields, GEN target, GEN B, GEN N0, GEN start_D, GEN mlim, GEN 
       pari_printf("\n");
     }
   }
-  return;
+
+  /* ======================================================================= */
+  /* 5. Pack and Return R1, R2, f1, f2 */
+  /* ======================================================================= */
+  GEN R1 = cgetg(glength(all_common) + 1, t_VEC);
+  GEN R2 = cgetg(glength(all_common) + 1, t_VEC);
+  long k_idx;
+  for (k_idx = 1; k_idx <= glength(all_common); ++k_idx)
+  {
+    GEN n_val = gel(all_common, k_idx);
+    GEN elemA_vec = mapget(gel(field_maps, gtos(idxA)), n_val);
+    GEN elemB_vec = mapget(gel(field_maps, gtos(idxB)), n_val);
+    
+    /* Reconstruct algebraic form: cx - cy*x */
+    GEN elemA_alg = gadd(gel(elemA_vec, 1), gmul(gel(elemA_vec, 2), pol_x(0)));
+    GEN elemB_alg = gadd(gel(elemB_vec, 1), gmul(gel(elemB_vec, 2), pol_x(0)));
+    
+    gel(R1, k_idx) = elemA_alg;
+    gel(R2, k_idx) = elemB_alg;
+  }
+
+  GEN f1 = gel(dataA, 4);
+  GEN f2 = gel(dataB, 4);
+
+  GEN res = mkvec4(R1, R2, f1, f2);
+  
+  /* <-- FIX: Deep copy the return vector and reset the stack cleanly */
+  return gerepilecopy(av, res); 
 }
 
